@@ -113,4 +113,16 @@ Abaixo estão as 4 questões obrigatórias do PDF e a resposta exata que usamos 
 - **[`gramado/sensores.py`](../gramado/sensores.py):** Usa funções senoidais com leve ruído aleatório para gerar leituras a cada 3 segundos. Isso garante que, durante a apresentação, o professor veja os valores cruzando as faixas críticas automaticamente (acionando e desligando irrigação, luzes e climatização sem precisar esperar horas).
 - **[`gramado/atuadores.py`](../gramado/atuadores.py):** Assina `estadio/gramado/atuadores` e mantém o estado físico atual dos equipamentos do estádio, destacando no terminal sempre que uma transição física ocorre (`[MUDANCA FISICA]`).
 
+### Etapa 3: [`gramado/controlador.py`](../gramado/controlador.py) (Controlador de Processo e Replicação)
+- **Execução Múltipla (Réplicas):** O mesmo código roda as 3 réplicas passando o ID por argumento (`python gramado/controlador.py 1`, `2` ou `3`), escutando nas portas `9091`, `9092` e `9093`.
+- **Ponte entre MQTT e Objetos Remotos (Pyro5):**
+  - Como **assinante MQTT**, recebe cada leitura dos sensores e aplica o método `_aplicar_regras_decisao()`.
+  - Como **publicador MQTT**, envia comandos para `estadio/gramado/atuadores` sempre que o estado de irrigação, iluminação artificial ou climatização muda.
+  - Como **objeto Pyro5 (`@Pyro5.api.expose`)**, disponibiliza métodos para o Middleware (`obter_estado`, `definir_modo`, `acionar_atuador_manual`) e para sincronia entre réplicas (`receber_replicacao`, `obter_estado_interno`).
+- **Replicação de Armazenamento:**
+  - Cada controlador grava seu estado e histórico recente em `gramado/storage/storage_controlador_X.json` com um contador incremental de `versao`.
+  - Quando recebe um comando ou muda seu estado, propaga a atualização para as réplicas via `_propagar_replicacao()`, e quando um controlador é reiniciado após uma queda, chama `sincronizar_ao_iniciar()` para copiar a versão mais recente de outra réplica ativa.
+- **Simulação de Invasão / Falha Bizantina (`definir_comprometimento`):**
+  - Quando ativada a flag `comprometido = True` em um controlador, ele passa a devolver valores absurdos/adulterados (`umidade_solo = 999.9`, `temperatura_grama = -45.0`, modos inválidos), permitindo demonstrar de forma prática a defesa do Middleware.
+
 
