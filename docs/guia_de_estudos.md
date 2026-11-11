@@ -147,4 +147,27 @@ Abaixo estão as 4 questões obrigatórias do PDF e a resposta exata que usamos 
 - **[`gramado/start_all.py`](../gramado/start_all.py):**
   - Abre automaticamente as 7 janelas do sistema distribuído (Controladores 1, 2 e 3, Middleware, Atuadores, Sensores e Cliente) com um único comando.
 
+---
+
+## 5. Roteiro Prático de Apresentação (3 Minutos)
+
+Se você precisar apresentar ou gravar um vídeo mostrando o trabalho funcionando, siga esta sequência rápida que comprova todos os itens da avaliação:
+
+1. **Subir o sistema:**
+   - Com o container do Mosquitto ativo (`docker compose up -d`), rode `python gramado/start_all.py`.
+   - Mostre rapidamente as janelas abertas: Sensores publicando no MQTT, Atuadores recebendo comandos e os 3 Controladores sincronizados.
+2. **Mostrar a Replicação de Armazenamento:**
+   - Abra a pasta `gramado/storage/` e mostre que `storage_controlador_1.json`, `2` e `3` estão sendo atualizados juntos na mesma `versao`.
+3. **Demonstrar comando do Cliente via Middleware:**
+   - Na janela do Cliente, escolha `[3] Alterar Modo de Operacao` $\rightarrow$ `[2] DIA_DE_JOGO`.
+   - Destaque que a irrigação e as *Grow Lights* são travadas em `DESLIGADO` imediatamente para proteger a partida.
+4. **Provar Tolerância a Falha por Queda (Crash):**
+   - Feche a janela do `Controlador 1` (ou dê `Ctrl+C` nela).
+   - No Cliente, envie qualquer comando (ex.: voltar para `[1] AUTOMATICO`).
+   - Mostre que o comando **funciona sem erro**, o painel mostra `[!!] Controlador 1: OFFLINE (Inacessivel)` e o quórum continua positivo (`2/3 controladores concordam`).
+5. **Provar Segurança contra Invasão / Falha Bizantina (TMR):**
+   - Religar o `Controlador 1` (`python gramado/controlador.py 1`) — destaque que ele sincroniza sozinho ao iniciar!
+   - No Cliente, escolha `[5] Simular Invasao/Falha Bizantina` $\rightarrow$ escolha o `Controlador 2` $\rightarrow$ `[1] SIMULAR INVASAO`.
+   - Mostre no painel do Cliente que o Middleware detecta na hora: `[!!] Controlador 2: INVADIDO/ERRO`, exibe o alerta de segurança na tela, mas **entrega ao cliente os dados corretos** graças ao voto majoritário dos Controladores 1 e 3!
+
 
