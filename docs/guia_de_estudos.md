@@ -125,4 +125,14 @@ Abaixo estão as 4 questões obrigatórias do PDF e a resposta exata que usamos 
 - **Simulação de Invasão / Falha Bizantina (`definir_comprometimento`):**
   - Quando ativada a flag `comprometido = True` em um controlador, ele passa a devolver valores absurdos/adulterados (`umidade_solo = 999.9`, `temperatura_grama = -45.0`, modos inválidos), permitindo demonstrar de forma prática a defesa do Middleware.
 
+### Etapa 4: [`gramado/middleware.py`](../gramado/middleware.py) (Middleware de Objetos, Tolerância a Falhas e TMR)
+- **Papel na Arquitetura:** O Middleware fica na porta `9090` (`PYRO:gramado.middleware@localhost:9090`) e é o **único ponto de contato do Cliente**.
+- **Como ele garante que o cliente receba resposta positiva mesmo que um controlador caia?**
+  - Nos métodos `obter_visao_geral()`, `definir_modo_operacao()` e `acionar_atuador()`, o Middleware percorre as 3 réplicas (`Controlador 1`, `2` e `3`) dentro de blocos `try/except` com timeout curto (`1.5s`).
+  - Se o `Controlador 1` cair (ou for encerrado no terminal), a exceção de rede é capturada, o nó é marcado como `OFFLINE (Inacessivel)` e a operação conclui com sucesso usando os `Controladores 2 e 3`.
+- **Como ele resolve o problema de segurança (controlador invadido ou com erro intermitente)?**
+  - Aplica uma defesa em **duas camadas**:
+    1. **1ª Barreira — Sanity Check (`_validar_estado_plausivel`):** Verifica se os modos de operação, estados de atuadores e grandezas físicas dos sensores estão dentro dos limites reais definidos em `LIMITES_FISICOS`. Leituras absurdas (como umidade `999.9%` ou modo `MODO_HACKED`) são bloqueadas imediatamente.
+    2. **2ª Barreira — Votação por Maioria / TMR (`_assinatura_consenso` + `Counter`):** Mesmo que um controlador invadido tente mentir dentro dos limites físicos (por exemplo, dizendo que a irrigação está `LIGADO` quando na verdade está `DESLIGADO`), o Middleware compara as assinaturas de resposta dos 3 controladores e escolhe a resposta majoritária (2 votos contra 1), isolando o controlador divergente e emitindo alerta de segurança para o cliente.
+
 
