@@ -101,15 +101,16 @@ Abaixo estão as 4 questões obrigatórias do PDF e a resposta exata que usamos 
 
 ## 4. Detalhamento dos Módulos Implementados
 
-### Etapa 2: `config.py`, `sensores.py` e `atuadores.py`
-- **[`config.py`](../config.py):** Centraliza constantes para evitar valores fixos espalhados pelo código:
+### Etapa 2: `gramado/config.py`, `gramado/sensores.py` e `gramado/atuadores.py`
+- **Organização Modular (`gramado/`):** Todo o subsistema do Smart Pitch fica isolado dentro da pasta `gramado/`, mantendo na raiz apenas a infraestrutura compartilhada do estádio (`docker-compose.yml`, `mosquitto/`, `requirements.txt` e `docs/`). Isso permite escalar futuramente para outros setores do estádio (ex.: `iluminacao/`, `catracas/`, `placar/`) sem refatorar a base.
+- **[`gramado/config.py`](../gramado/config.py):** Centraliza constantes para evitar valores fixos espalhados pelo código:
   - Tópicos MQTT: `estadio/gramado/sensores` e `estadio/gramado/atuadores`.
   - Limiares agronômicos:
     - Umidade $< 40\%$ liga irrigação; $> 65\%$ desliga.
     - Luminosidade $< 12.000\text{ lux}$ liga as *Grow Lights*.
     - Temperatura $< 16^\circ\text{C}$ liga aquecimento; $> 27^\circ\text{C}$ liga resfriamento/ventilação.
-  - Endereços Pyro5 diretos (`PYRO:controlador.X@localhost:909X`), o que dispensa a execução de um servidor de nomes externo (`pyro5-ns`) e torna o projeto muito mais simples de subir.
-- **[`sensores.py`](../sensores.py):** Usa funções senoidais com leve ruído aleatório para gerar leituras a cada 3 segundos. Isso garante que, durante a apresentação, o professor veja os valores cruzando as faixas críticas automaticamente (acionando e desligando irrigação, luzes e climatização sem precisar esperar horas).
-- **[`atuadores.py`](../atuadores.py):** Assina `estadio/gramado/atuadores` e mantém o estado físico atual dos equipamentos do estádio, destacando no terminal sempre que uma transição física ocorre (`[MUDANCA FISICA]`).
+  - Endereços Pyro5 diretos (`PYRO:gramado.controlador.X@localhost:909X`), o que dispensa a execução de um servidor de nomes externo (`pyro5-ns`) e torna o projeto muito mais simples de subir.
+- **[`gramado/sensores.py`](../gramado/sensores.py):** Usa funções senoidais com leve ruído aleatório para gerar leituras a cada 3 segundos. Isso garante que, durante a apresentação, o professor veja os valores cruzando as faixas críticas automaticamente (acionando e desligando irrigação, luzes e climatização sem precisar esperar horas).
+- **[`gramado/atuadores.py`](../gramado/atuadores.py):** Assina `estadio/gramado/atuadores` e mantém o estado físico atual dos equipamentos do estádio, destacando no terminal sempre que uma transição física ocorre (`[MUDANCA FISICA]`).
 
 

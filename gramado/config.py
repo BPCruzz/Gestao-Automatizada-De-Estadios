@@ -1,8 +1,14 @@
 """
-Configurações globais do sistema Smart Pitch (Gestão Automatizada de Gramado).
+Configurações do subsistema Smart Pitch (Módulo Gramado).
 Centraliza endereços do Broker MQTT, tópicos Pub/Sub, portas dos objetos Pyro5
 e limiares agronômicos para tomada de decisão.
 """
+
+from pathlib import Path
+
+# Diretório base do módulo gramado (onde os arquivos storage_*.json serão salvos)
+DIRETORIO_GRAMADO = Path(__file__).resolve().parent
+DIRETORIO_STORAGE = DIRETORIO_GRAMADO / "storage"
 
 # =============================================================================
 # 1. CONFIGURAÇÕES DO BROKER MQTT
@@ -51,15 +57,15 @@ ESTADOS_CLIMATIZACAO = ("AQUECENDO", "RESFRIANDO", "DESLIGADO")
 HOST_PYRO = "localhost"
 
 CONTROLADORES_CONFIG = {
-    1: {"host": HOST_PYRO, "port": 9091, "obj_name": "controlador.1"},
-    2: {"host": HOST_PYRO, "port": 9092, "obj_name": "controlador.2"},
-    3: {"host": HOST_PYRO, "port": 9093, "obj_name": "controlador.3"},
+    1: {"host": HOST_PYRO, "port": 9091, "obj_name": "gramado.controlador.1"},
+    2: {"host": HOST_PYRO, "port": 9092, "obj_name": "gramado.controlador.2"},
+    3: {"host": HOST_PYRO, "port": 9093, "obj_name": "gramado.controlador.3"},
 }
 
 MIDDLEWARE_CONFIG = {
     "host": HOST_PYRO,
     "port": 9090,
-    "obj_name": "smartpitch.middleware",
+    "obj_name": "gramado.middleware",
 }
 
 

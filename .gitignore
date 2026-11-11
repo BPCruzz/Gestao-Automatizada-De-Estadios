@@ -8,6 +8,7 @@ env/
 
 # Armazenamento local gerado em execução (réplicas dos controladores)
 storage_*.json
+gramado/storage/
 *.log
 
 # Mosquitto data/log
