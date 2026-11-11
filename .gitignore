@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Armazenamento local gerado em execução (réplicas dos controladores)
+storage_*.json
+*.log
+
+# Mosquitto data/log
+mosquitto/data/
+mosquitto/log/
+
+# IDEs e SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
