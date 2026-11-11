@@ -135,4 +135,16 @@ Abaixo estão as 4 questões obrigatórias do PDF e a resposta exata que usamos 
     1. **1ª Barreira — Sanity Check (`_validar_estado_plausivel`):** Verifica se os modos de operação, estados de atuadores e grandezas físicas dos sensores estão dentro dos limites reais definidos em `LIMITES_FISICOS`. Leituras absurdas (como umidade `999.9%` ou modo `MODO_HACKED`) são bloqueadas imediatamente.
     2. **2ª Barreira — Votação por Maioria / TMR (`_assinatura_consenso` + `Counter`):** Mesmo que um controlador invadido tente mentir dentro dos limites físicos (por exemplo, dizendo que a irrigação está `LIGADO` quando na verdade está `DESLIGADO`), o Middleware compara as assinaturas de resposta dos 3 controladores e escolhe a resposta majoritária (2 votos contra 1), isolando o controlador divergente e emitindo alerta de segurança para o cliente.
 
+### Etapa 5: [`gramado/cliente.py`](../gramado/cliente.py) e [`gramado/start_all.py`](../gramado/start_all.py) (Painel do Operador e Inicializador)
+- **[`gramado/cliente.py`](../gramado/cliente.py):**
+  - Conecta-se **exclusivamente ao Middleware** (`PYRO:gramado.middleware@localhost:9090`), demonstrando a transparência de localização e de replicação.
+  - Exibe em tempo real:
+    - O estado de saúde de cada réplica (`ONLINE (Integro)`, `OFFLINE (Inacessivel)` ou `INVADIDO/ERRO`).
+    - O quórum de consenso TMR (ex.: `3/3 controladores concordam` ou `2/3 controladores concordam`).
+    - Os alertas de segurança gerados quando um controlador diverge ou mente.
+    - Os valores dos sensores, estados dos atuadores e últimos eventos gravados no storage replicado.
+  - Oferece a opção `[5] [Teste SD] Simular Invasao/Falha Bizantina em um Controlador` para facilitar a demonstração ao vivo para o professor sem precisar editar código.
+- **[`gramado/start_all.py`](../gramado/start_all.py):**
+  - Abre automaticamente as 7 janelas do sistema distribuído (Controladores 1, 2 e 3, Middleware, Atuadores, Sensores e Cliente) com um único comando.
+
 
