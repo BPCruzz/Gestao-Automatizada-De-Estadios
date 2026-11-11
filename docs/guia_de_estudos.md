@@ -97,3 +97,19 @@ Abaixo estão as 4 questões obrigatórias do PDF e a resposta exata que usamos 
 | **Invocação Remota de Métodos (Pyro5)** | Permite chamar funções de um objeto Python que está rodando em outro processo/computador como se fosse um objeto local. |
 | **TMR (Redundância Modular Tripla)** | Técnica clássica de tolerância a falhas onde 3 módulos executam a mesma tarefa e um votador (no nosso caso, o Middleware) escolhe a resposta da maioria (2 contra 1). |
 
+---
+
+## 4. Detalhamento dos Módulos Implementados
+
+### Etapa 2: `config.py`, `sensores.py` e `atuadores.py`
+- **[`config.py`](../config.py):** Centraliza constantes para evitar valores fixos espalhados pelo código:
+  - Tópicos MQTT: `estadio/gramado/sensores` e `estadio/gramado/atuadores`.
+  - Limiares agronômicos:
+    - Umidade $< 40\%$ liga irrigação; $> 65\%$ desliga.
+    - Luminosidade $< 12.000\text{ lux}$ liga as *Grow Lights*.
+    - Temperatura $< 16^\circ\text{C}$ liga aquecimento; $> 27^\circ\text{C}$ liga resfriamento/ventilação.
+  - Endereços Pyro5 diretos (`PYRO:controlador.X@localhost:909X`), o que dispensa a execução de um servidor de nomes externo (`pyro5-ns`) e torna o projeto muito mais simples de subir.
+- **[`sensores.py`](../sensores.py):** Usa funções senoidais com leve ruído aleatório para gerar leituras a cada 3 segundos. Isso garante que, durante a apresentação, o professor veja os valores cruzando as faixas críticas automaticamente (acionando e desligando irrigação, luzes e climatização sem precisar esperar horas).
+- **[`atuadores.py`](../atuadores.py):** Assina `estadio/gramado/atuadores` e mantém o estado físico atual dos equipamentos do estádio, destacando no terminal sempre que uma transição física ocorre (`[MUDANCA FISICA]`).
+
+
