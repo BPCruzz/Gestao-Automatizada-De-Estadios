@@ -17,7 +17,15 @@ import time
 from pathlib import Path
 
 DIRETORIO_GRAMADO = Path(__file__).resolve().parent
-PYTHON_EXEC = sys.executable
+
+# Garante o interpretador correto caso o Windows tenha aliases da WindowsStore
+if "WindowsApps" in sys.executable:
+    PYTHON_EXEC = r"C:\Users\bryan\AppData\Local\Programs\Python\Python315\python.exe"
+    if not Path(PYTHON_EXEC).exists():
+        PYTHON_EXEC = "py"
+else:
+    PYTHON_EXEC = sys.executable
+
 
 
 def abrir_processo(titulo: str, comando_args: list[str]) -> None:

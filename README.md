@@ -28,6 +28,9 @@ Gestao-Automatizada-De-Estadios/
 │   ├── plano_implementacao.md  # Roteiro de desenvolvimento incremental
 │   ├── guia_de_estudos.md      # Guia teórico/prático e roteiro de apresentação
 │   └── relatorio_tecnico.md    # Relatório técnico completo do trabalho de SD
+├── inicializacao_rapida/
+│   ├── iniciar_smart_pitch.bat # Duplo-clique: sobe Docker e todos os terminais
+│   └── parar_smart_pitch.bat   # Duplo-clique: fecha terminais e para o Docker
 └── gramado/
     ├── config.py               # Configurações de MQTT, Pyro5 e limiares agronômicos
     ├── sensores.py             # Publicador MQTT de sensores do gramado
