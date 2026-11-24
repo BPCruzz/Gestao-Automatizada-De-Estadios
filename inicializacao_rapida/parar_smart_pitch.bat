@@ -7,7 +7,8 @@ echo ==============================================================
 echo   ENCERRANDO SMART PITCH (GESTAO DE ESTADIOS)
 echo ==============================================================
 
-echo [1/2] Fechando janelas dos componentes Python...
+echo [1/2] Encerrando processos e janelas do Smart Pitch...
+taskkill /F /FI "WINDOWTITLE eq Smart Pitch - Inicializador Rapido*" /T 2>nul
 taskkill /F /FI "WINDOWTITLE eq Controlador 1*" /T 2>nul
 taskkill /F /FI "WINDOWTITLE eq Controlador 2*" /T 2>nul
 taskkill /F /FI "WINDOWTITLE eq Controlador 3*" /T 2>nul
@@ -17,7 +18,7 @@ taskkill /F /FI "WINDOWTITLE eq Cliente Smart Pitch*" /T 2>nul
 taskkill /F /FI "WINDOWTITLE eq Painel Smart Pitch*" /T 2>nul
 
 echo.
-echo [2/2] Parando o Broker Mosquitto MQTT (Docker)...
+echo [2/2] Parando Broker MQTT e bancos PostgreSQL (Docker)...
 docker compose down
 
 echo.
@@ -25,4 +26,3 @@ echo ==============================================================
 echo   Todos os componentes foram encerrados com sucesso!
 echo ==============================================================
 pause
-

@@ -4,16 +4,29 @@ title Smart Pitch - Inicializador Rapido
 cd /d "%~dp0\.."
 
 echo ==============================================================
-echo   GESTAO AUTOMATIZADA DE ESTADIOS — SMART PITCH (SD)
+echo   GESTAO AUTOMATIZADA DE ESTADIOS - SMART PITCH (SD)
 echo ==============================================================
-echo [1/2] Verificando e subindo o Broker MQTT (Docker)...
+echo [1/2] Subindo Broker MQTT e 3 bancos PostgreSQL (Docker)...
 docker compose up -d
+if errorlevel 1 (
+    echo.
+    echo [ERRO] Falha ao subir os containers Docker. Verifique se o Docker Desktop esta aberto.
+    pause
+    exit /b 1
+)
+
+echo Aguardando containers iniciarem...
+timeout /t 3 /nobreak >nul
 
 echo.
 echo [2/2] Iniciando gerenciador unificado do Smart Pitch...
-python gramado\start_all.py 2>nul || py gramado\start_all.py
+where python >nul 2>nul
+if %errorlevel%==0 (
+    python gramado\start_all.py
+) else (
+    py gramado\start_all.py
+)
 
 echo.
-echo Processos inicializados!
+echo Gerenciador encerrado. (Para parar tambem os containers Docker, execute parar_smart_pitch.bat)
 pause
-
