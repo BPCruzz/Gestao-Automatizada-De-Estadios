@@ -10,8 +10,8 @@ echo [1/2] Verificando e subindo o Broker MQTT (Docker)...
 docker compose up -d
 
 echo.
-echo [2/2] Iniciando todos os modulos distribuidos...
-py gramado\start_all.py 2>nul || "C:\Users\bryan\AppData\Local\Programs\Python\Python315\python.exe" gramado\start_all.py
+echo [2/2] Iniciando gerenciador unificado do Smart Pitch...
+python gramado\start_all.py 2>nul || py gramado\start_all.py
 
 echo.
 echo Processos inicializados!

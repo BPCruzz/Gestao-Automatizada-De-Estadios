@@ -14,6 +14,7 @@ taskkill /F /FI "WINDOWTITLE eq Controlador 3*" /T 2>nul
 taskkill /F /FI "WINDOWTITLE eq Atuadores MQTT*" /T 2>nul
 taskkill /F /FI "WINDOWTITLE eq Sensores MQTT*" /T 2>nul
 taskkill /F /FI "WINDOWTITLE eq Cliente Smart Pitch*" /T 2>nul
+taskkill /F /FI "WINDOWTITLE eq Painel Smart Pitch*" /T 2>nul
 
 echo.
 echo [2/2] Parando o Broker Mosquitto MQTT (Docker)...
