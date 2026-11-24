@@ -2,12 +2,11 @@
 Script Inicializador Rápido do Subsistema Gramado (Smart Pitch).
 Abre automaticamente em janelas separadas de terminal todos os componentes:
   - 3 Réplicas do Controlador de Processo (IDs 1, 2 e 3)
-  - 1 Middleware de Objetos Distribuídos
   - 1 Módulo de Atuadores MQTT
   - 1 Módulo de Sensores MQTT
-  - 1 Painel Cliente Interativo
+  - 1 Painel Cliente Interativo (comunicação direta com os controladores)
 
-Pré-requisito: Broker MQTT Mosquitto rodando (docker compose up -d).
+Pré-requisito: Broker MQTT Mosquitto e 3 bancos PostgreSQL rodando (docker compose up -d).
 """
 
 import os
@@ -52,7 +51,6 @@ def main() -> None:
         ("Controlador 1", [PYTHON_EXEC, "controlador.py", "1"]),
         ("Controlador 2", [PYTHON_EXEC, "controlador.py", "2"]),
         ("Controlador 3", [PYTHON_EXEC, "controlador.py", "3"]),
-        ("Middleware SD", [PYTHON_EXEC, "middleware.py"]),
         ("Atuadores MQTT", [PYTHON_EXEC, "atuadores.py"]),
         ("Sensores MQTT", [PYTHON_EXEC, "sensores.py"]),
     ]

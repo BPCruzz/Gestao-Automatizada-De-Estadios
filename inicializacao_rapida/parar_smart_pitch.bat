@@ -11,7 +11,6 @@ echo [1/2] Fechando janelas dos componentes Python...
 taskkill /F /FI "WINDOWTITLE eq Controlador 1*" /T 2>nul
 taskkill /F /FI "WINDOWTITLE eq Controlador 2*" /T 2>nul
 taskkill /F /FI "WINDOWTITLE eq Controlador 3*" /T 2>nul
-taskkill /F /FI "WINDOWTITLE eq Middleware SD*" /T 2>nul
 taskkill /F /FI "WINDOWTITLE eq Atuadores MQTT*" /T 2>nul
 taskkill /F /FI "WINDOWTITLE eq Sensores MQTT*" /T 2>nul
 taskkill /F /FI "WINDOWTITLE eq Cliente Smart Pitch*" /T 2>nul

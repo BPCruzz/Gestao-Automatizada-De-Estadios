@@ -1,6 +1,7 @@
 """
 Módulo Cliente (Painel de Controle e Monitoramento do Operador - Smart Pitch).
-Conecta-se exclusivamente ao Middleware via comunicação baseada em objetos (Pyro5).
+Conecta-se diretamente aos Controladores de Processo via Pyro5 (cliente_rpc.py),
+sem servidor intermediário.
 
 Permite:
   - Visualizar em tempo real sensores, atuadores, status das réplicas e quórum TMR.
@@ -12,20 +13,15 @@ Permite:
 
 import os
 import time
-import Pyro5.api
 
-from config import obter_uri_middleware
+from cliente_rpc import ClienteControladoresRPC
+
+
+rpc = ClienteControladoresRPC()
 
 
 def limpar_tela() -> None:
     os.system("cls" if os.name == "nt" else "clear")
-
-
-def obter_proxy_middleware() -> Pyro5.api.Proxy:
-    uri = obter_uri_middleware()
-    proxy = Pyro5.api.Proxy(uri)
-    proxy._pyroTimeout = 3.0
-    return proxy
 
 
 def exibir_painel(visao: dict) -> None:
@@ -47,7 +43,7 @@ def exibir_painel(visao: dict) -> None:
     status_ctrls = visao.get("status_controladores", {})
     alertas = visao.get("alertas_seguranca", [])
 
-    print(f" Horario Middleware : {visao.get('timestamp_middleware')} | Versao Storage Replicado: v{estado.get('versao')}")
+    print(f" Horario Consulta   : {visao.get('timestamp_consulta')} | Versao Storage Replicado: v{estado.get('versao')}")
     print(f" Modo de Operacao   : [{estado.get('modo_operacao')}]")
     print(f" Quorum Consenso TMR: {visao.get('quorum')}")
     print("-" * 74)
@@ -78,7 +74,7 @@ def exibir_painel(visao: dict) -> None:
     historico = estado.get("historico_recente", [])
     if historico:
         print("-" * 74)
-        print(" [ULTIMOS EVENTOS REPLICADOS NO STORAGE]")
+        print(" [ULTIMOS EVENTOS REPLICADOS NO POSTGRESQL]")
         for item in historico[-4:]:
             print(f"   {item}")
 
@@ -87,12 +83,11 @@ def exibir_painel(visao: dict) -> None:
 
 def consultar_e_mostrar() -> None:
     try:
-        with obter_proxy_middleware() as mw:
-            visao = mw.obter_visao_geral()
-            exibir_painel(visao)
+        visao = rpc.obter_visao_geral()
+        exibir_painel(visao)
     except Exception as exc:
-        print(f"\n[ERRO] Nao foi possivel comunicar com o Middleware ({obter_uri_middleware()}): {exc}")
-        print("Verifique se 'python gramado/middleware.py' esta em execucao.\n")
+        print(f"\n[ERRO] Falha na comunicacao direta com os Controladores: {exc}")
+        print("Verifique se os Controladores estao em execucao.\n")
 
 
 def monitorar_tempo_real() -> None:
@@ -120,13 +115,12 @@ def menu_alterar_modo() -> None:
         return
 
     try:
-        with obter_proxy_middleware() as mw:
-            res = mw.definir_modo_operacao(mapa[op])
-            print(f"\n-> Resposta do Middleware: {res.get('mensagem')}")
-            for alerta in res.get("alertas_seguranca", []):
-                print(f"   [ALERTA SEGURANCA] {alerta}")
+        res = rpc.definir_modo_operacao(mapa[op])
+        print(f"\n-> Resultado: {res.get('mensagem')}")
+        for alerta in res.get("alertas_seguranca", []):
+            print(f"   [ALERTA SEGURANCA] {alerta}")
     except Exception as exc:
-        print(f"[ERRO] Falha ao invocar metodo no Middleware: {exc}")
+        print(f"[ERRO] Falha ao invocar metodo nos Controladores: {exc}")
 
 
 def menu_acionar_atuador() -> None:
@@ -154,13 +148,12 @@ def menu_acionar_atuador() -> None:
         return
 
     try:
-        with obter_proxy_middleware() as mw:
-            res = mw.acionar_atuador(atuador, novo_estado)
-            print(f"\n-> Resposta do Middleware: {res.get('mensagem')}")
-            for alerta in res.get("alertas_seguranca", []):
-                print(f"   [ALERTA SEGURANCA] {alerta}")
+        res = rpc.acionar_atuador(atuador, novo_estado)
+        print(f"\n-> Resultado: {res.get('mensagem')}")
+        for alerta in res.get("alertas_seguranca", []):
+            print(f"   [ALERTA SEGURANCA] {alerta}")
     except Exception as exc:
-        print(f"[ERRO] Falha ao invocar metodo no Middleware: {exc}")
+        print(f"[ERRO] Falha ao invocar metodo nos Controladores: {exc}")
 
 
 def menu_simular_seguranca() -> None:
@@ -176,11 +169,10 @@ def menu_simular_seguranca() -> None:
     comprometido = acao == "1"
 
     try:
-        with obter_proxy_middleware() as mw:
-            res = mw.simular_invasao_controlador(int(ctrl_id), comprometido)
-            print(f"\n-> {res.get('mensagem')}")
+        res = rpc.simular_invasao_controlador(int(ctrl_id), comprometido)
+        print(f"\n-> {res.get('mensagem')}")
     except Exception as exc:
-        print(f"[ERRO] Falha ao comunicar com o Middleware: {exc}")
+        print(f"[ERRO] Falha ao comunicar com o Controlador {ctrl_id}: {exc}")
 
 
 def main() -> None:
@@ -221,4 +213,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -62,22 +62,10 @@ CONTROLADORES_CONFIG = {
     3: {"host": HOST_PYRO, "port": 9093, "obj_name": "gramado.controlador.3"},
 }
 
-MIDDLEWARE_CONFIG = {
-    "host": HOST_PYRO,
-    "port": 9090,
-    "obj_name": "gramado.middleware",
-}
-
 
 def obter_uri_controlador(ctrl_id: int) -> str:
     """Retorna a URI Pyro5 direta para o controlador informado."""
     cfg = CONTROLADORES_CONFIG[ctrl_id]
-    return f"PYRO:{cfg['obj_name']}@{cfg['host']}:{cfg['port']}"
-
-
-def obter_uri_middleware() -> str:
-    """Retorna a URI Pyro5 direta para o Middleware."""
-    cfg = MIDDLEWARE_CONFIG
     return f"PYRO:{cfg['obj_name']}@{cfg['host']}:{cfg['port']}"
 
 
