@@ -117,3 +117,42 @@ def obter_dsn_banco(ctrl_id: int) -> str:
         f"user={cfg['user']} password={cfg['password']}"
     )
 
+
+def validar_leituras_sensores(sensores: dict) -> tuple[bool, str]:
+    """Valida se as leituras de sensores estão dentro dos limites físicos reais."""
+    if not isinstance(sensores, dict):
+        return False, "Formato de sensores invalido"
+
+    for campo, (min_val, max_val) in LIMITES_FISICOS.items():
+        valor = sensores.get(campo)
+        if valor is None or isinstance(valor, bool) or not isinstance(valor, (int, float)):
+            return False, f"Leitura ausente ou corrompida em '{campo}'"
+        if not (min_val <= float(valor) <= max_val):
+            return False, f"Valor fora dos limites fisicos em '{campo}': {valor} (esperado {min_val}..{max_val})"
+
+    return True, "OK"
+
+
+def validar_estado_plausivel(estado: dict) -> tuple[bool, str]:
+    """
+    Sanity Check: verifica se modo, atuadores e sensores de um estado
+    respeitam as regras de domínio e limites físicos do Smart Pitch.
+    """
+    if not isinstance(estado, dict):
+        return False, "Formato de resposta invalido"
+
+    modo = estado.get("modo_operacao")
+    if modo not in MODOS_VALIDOS:
+        return False, f"Modo de operacao adulterado ({modo})"
+
+    atuadores = estado.get("atuadores", {})
+    if (
+        not isinstance(atuadores, dict)
+        or atuadores.get("irrigacao") not in ESTADOS_IRRIGACAO
+        or atuadores.get("grow_lights") not in ESTADOS_GROW_LIGHTS
+        or atuadores.get("climatizacao") not in ESTADOS_CLIMATIZACAO
+    ):
+        return False, f"Estados de atuadores invalidos ({atuadores})"
+
+    return validar_leituras_sensores(estado.get("sensores", {}))
+

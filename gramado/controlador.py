@@ -1,11 +1,11 @@
 """
 Módulo Controlador de Processo (Smart Pitch - Gramado).
 Responsabilidades na Arquitetura de Sistemas Distribuídos:
-  1. Assina o tópico de sensores no Broker MQTT e processa as regras de negócio.
+  1. Assina o tópico de sensores no Broker MQTT, valida limites físicos e processa decisões.
   2. Publica comandos de atuação no Broker MQTT quando o estado dos atuadores muda.
-  3. Mantém armazenamento persistente em JSON (gramado/storage/storage_controlador_X.json).
+  3. Mantém armazenamento persistente em banco PostgreSQL dedicado por réplica.
   4. Replica e sincroniza o estado armazenado com os demais controladores via Pyro5.
-  5. Expõe métodos remotos baseados em objetos (Pyro5) para o Middleware.
+  5. Expõe métodos remotos baseados em objetos (Pyro5) diretamente para os Clientes.
   6. Permite simular comportamento bizantino (invasão/valores adulterados) para testes de segurança.
 
 Uso:
@@ -26,7 +26,7 @@ import Pyro5.errors
 
 from config import (
     CONTROLADORES_CONFIG,
-    DIRETORIO_STORAGE,
+    DATABASES_CONFIG,
     ESTADOS_CLIMATIZACAO,
     ESTADOS_GROW_LIGHTS,
     ESTADOS_IRRIGACAO,
@@ -42,7 +42,10 @@ from config import (
     UMIDADE_IDEAL_PARADA,
     UMIDADE_MINIMA_IRRIGACAO,
     obter_uri_controlador,
+    validar_estado_plausivel,
+    validar_leituras_sensores,
 )
+from storage_db import StoragePostgres
 
 
 @Pyro5.api.expose
@@ -53,9 +56,7 @@ class ControladorGramado:
         self.ctrl_id = ctrl_id
         self.lock = threading.Lock()
         self.comprometido = False  # Flag para simular invasão / falha bizantina
-
-        DIRETORIO_STORAGE.mkdir(parents=True, exist_ok=True)
-        self.arquivo_storage = DIRETORIO_STORAGE / f"storage_controlador_{self.ctrl_id}.json"
+        self.storage = StoragePostgres(self.ctrl_id)
 
         # Estado padrão inicial do controlador
         self.estado = {
@@ -81,29 +82,26 @@ class ControladorGramado:
         self.mqtt_client = self._iniciar_mqtt()
 
     # =========================================================================
-    # ARMAZENAMENTO E REPLICAÇÃO ENTRE CONTROLADORES
+    # ARMAZENAMENTO POSTGRESQL E REPLICAÇÃO ENTRE CONTROLADORES
     # =========================================================================
     def _carregar_storage_local(self) -> None:
-        """Carrega o arquivo JSON local se já existir de uma execução anterior."""
-        if self.arquivo_storage.exists():
-            try:
-                with open(self.arquivo_storage, "r", encoding="utf-8") as f:
-                    dados = json.load(f)
-                    self.estado.update(dados)
-                    self.estado["controlador_id"] = self.ctrl_id
-                print(f"[CTRL {self.ctrl_id}] Storage carregado de {self.arquivo_storage.name}")
-            except Exception as exc:
-                print(f"[CTRL {self.ctrl_id}] Aviso ao ler storage local: {exc}")
-        else:
-            self._salvar_storage_local()
+        """Carrega o estado do PostgreSQL desta réplica ou inicializa o registro."""
+        dados = self.storage.carregar_estado()
+        if dados:
+            plausivel, motivo = validar_estado_plausivel(dados)
+            if plausivel:
+                self.estado.update(dados)
+                self.estado["controlador_id"] = self.ctrl_id
+                db_name = DATABASES_CONFIG[self.ctrl_id]["dbname"]
+                print(f"[CTRL {self.ctrl_id}] Estado carregado do PostgreSQL '{db_name}' (v{self.estado['versao']})")
+                return
+            print(f"[CTRL {self.ctrl_id}] Estado salvo descartado pelo Sanity Check: {motivo}")
+
+        self._salvar_storage_local()
 
     def _salvar_storage_local(self) -> None:
-        """Persiste o estado atual no arquivo JSON dedicado desta réplica."""
-        try:
-            with open(self.arquivo_storage, "w", encoding="utf-8") as f:
-                json.dump(self.estado, f, indent=2, ensure_ascii=False)
-        except Exception as exc:
-            print(f"[CTRL {self.ctrl_id}] Erro ao salvar storage: {exc}")
+        """Persiste o estado atual no banco PostgreSQL dedicado desta réplica."""
+        self.storage.salvar_estado(self.estado)
 
     def _registrar_evento(self, descricao: str) -> None:
         """Adiciona um evento ao histórico replicado (mantendo os últimos 10 registros)."""
@@ -111,6 +109,16 @@ class ControladorGramado:
         historico = self.estado.get("historico_recente", [])
         historico.append(evento)
         self.estado["historico_recente"] = historico[-10:]
+
+    def _aplicar_estado_remoto(self, estado_remoto: dict) -> None:
+        """Sobrescreve o estado local com uma réplica validada e persiste no banco."""
+        self.estado["versao"] = estado_remoto["versao"]
+        self.estado["modo_operacao"] = estado_remoto["modo_operacao"]
+        self.estado["sensores"] = copy.deepcopy(estado_remoto["sensores"])
+        self.estado["atuadores"] = copy.deepcopy(estado_remoto["atuadores"])
+        self.estado["ultima_atualizacao"] = estado_remoto["ultima_atualizacao"]
+        self.estado["historico_recente"] = list(estado_remoto.get("historico_recente", []))
+        self._salvar_storage_local()
 
     def _propagar_replicacao(self) -> None:
         """Envia o estado atualizado para as demais réplicas de controladores."""
@@ -128,7 +136,11 @@ class ControladorGramado:
                 pass
 
     def sincronizar_ao_iniciar(self) -> None:
-        """Ao subir, consulta réplicas ativas para recuperar o estado mais recente."""
+        """Ao subir, consulta réplicas ativas íntegras para recuperar o estado mais recente."""
+        melhor_estado = None
+        melhor_origem = None
+        maior_versao = self.estado.get("versao", 0)
+
         for outro_id in CONTROLADORES_CONFIG:
             if outro_id == self.ctrl_id:
                 continue
@@ -137,19 +149,26 @@ class ControladorGramado:
                 with Pyro5.api.Proxy(uri) as proxy:
                     proxy._pyroTimeout = 1.0
                     estado_remoto = proxy.obter_estado_interno()
-                    if estado_remoto and estado_remoto.get("versao", 0) > self.estado.get("versao", 0):
-                        with self.lock:
-                            self.estado["versao"] = estado_remoto["versao"]
-                            self.estado["modo_operacao"] = estado_remoto["modo_operacao"]
-                            self.estado["sensores"] = estado_remoto["sensores"]
-                            self.estado["atuadores"] = estado_remoto["atuadores"]
-                            self.estado["ultima_atualizacao"] = estado_remoto["ultima_atualizacao"]
-                            self.estado["historico_recente"] = estado_remoto.get("historico_recente", [])
-                            self._salvar_storage_local()
-                        print(f"[CTRL {self.ctrl_id}] Sincronizado com Controlador {outro_id} (versao {self.estado['versao']})")
-                        break
+
+                plausivel, _ = validar_estado_plausivel(estado_remoto)
+                if not plausivel:
+                    continue
+
+                versao_remota = estado_remoto.get("versao", 0)
+                if versao_remota > maior_versao:
+                    maior_versao = versao_remota
+                    melhor_estado = estado_remoto
+                    melhor_origem = outro_id
             except Exception:
                 pass
+
+        if melhor_estado is not None:
+            with self.lock:
+                self._aplicar_estado_remoto(melhor_estado)
+            print(
+                f"[CTRL {self.ctrl_id}] Sincronizado com Controlador {melhor_origem} "
+                f"(versao {self.estado['versao']})"
+            )
 
     # =========================================================================
     # INTEGRAÇÃO MQTT (SENSORES E ATUADORES)
@@ -175,17 +194,22 @@ class ControladorGramado:
             print(f"[CTRL {self.ctrl_id}] Conectado ao MQTT e assinando '{TOPICO_SENSORES}'")
 
     def _ao_receber_sensor_mqtt(self, client, userdata, msg) -> None:
-        """Recebe leituras dos sensores e executa a tomada de decisão."""
+        """Recebe leituras dos sensores, valida limites físicos e executa a tomada de decisão."""
         try:
             leituras = json.loads(msg.payload.decode("utf-8"))
         except Exception:
             return
 
+        plausivel, motivo = validar_leituras_sensores(leituras)
+        if not plausivel:
+            print(f"[CTRL {self.ctrl_id}] Leitura MQTT rejeitada pelo Sanity Check: {motivo}")
+            return
+
         with self.lock:
             self.estado["sensores"] = {
-                "umidade_solo": float(leituras.get("umidade_solo", 50.0)),
-                "luminosidade_lux": float(leituras.get("luminosidade_lux", 15000.0)),
-                "temperatura_grama": float(leituras.get("temperatura_grama", 22.0)),
+                "umidade_solo": float(leituras["umidade_solo"]),
+                "luminosidade_lux": float(leituras["luminosidade_lux"]),
+                "temperatura_grama": float(leituras["temperatura_grama"]),
                 "timestamp": leituras.get("timestamp", datetime.now().strftime("%H:%M:%S")),
             }
 
@@ -195,7 +219,6 @@ class ControladorGramado:
 
             self.estado["versao"] += 1
             self.estado["ultima_atualizacao"] = datetime.now().strftime("%H:%M:%S")
-            self._salvar_storage_local()
 
             mudou_atuador = atuadores_antes != atuadores_depois
             if mudou_atuador:
@@ -205,8 +228,9 @@ class ControladorGramado:
                     f"Luz={atuadores_depois['grow_lights']}, "
                     f"Clima={atuadores_depois['climatizacao']}"
                 )
-                self._salvar_storage_local()
                 self._publicar_comando_atuadores()
+
+            self._salvar_storage_local()
 
         status_comprometido = " [MODO INVADIDO/ADULTERADO ATIVO]" if self.comprometido else ""
         print(
@@ -235,7 +259,7 @@ class ControladorGramado:
 
         # 1. Decisão de Climatização Subterrânea (ativa tanto em AUTOMATICO quanto em DIA_DE_JOGO)
         if temp < TEMPERATURA_MINIMA_C:
-             self.estado["atuadores"]["climatizacao"] = "AQUECENDO"
+            self.estado["atuadores"]["climatizacao"] = "AQUECENDO"
         elif temp > TEMPERATURA_MAXIMA_C:
             self.estado["atuadores"]["climatizacao"] = "RESFRIANDO"
         else:
@@ -272,46 +296,52 @@ class ControladorGramado:
             print(f"[CTRL {self.ctrl_id}] Erro ao publicar nos atuadores: {exc}")
 
     # =========================================================================
-    # MÉTODOS REMOTOS (PYRO5) CHAMADOS PELO MIDDLEWARE OU OUTRAS RÉPLICAS
+    # MÉTODOS REMOTOS (PYRO5) CHAMADOS PELOS CLIENTES OU OUTRAS RÉPLICAS
     # =========================================================================
     def obter_estado_interno(self) -> dict:
         """Usado para sincronização inicial entre réplicas."""
         with self.lock:
+            if self.comprometido:
+                return self._montar_resposta_comprometida()
             return copy.deepcopy(self.estado)
 
     def receber_replicacao(self, estado_remoto: dict) -> bool:
-        """Recebe atualização de estado enviada por outro controlador e grava no JSON."""
+        """Recebe atualização de estado enviada por outro controlador, valida e grava no PostgreSQL."""
+        plausivel, motivo = validar_estado_plausivel(estado_remoto)
+        if not plausivel:
+            print(f"[CTRL {self.ctrl_id}] Replicacao rejeitada pelo Sanity Check: {motivo}")
+            return False
+
         with self.lock:
             if estado_remoto.get("versao", 0) >= self.estado.get("versao", 0):
-                self.estado["versao"] = estado_remoto["versao"]
-                self.estado["modo_operacao"] = estado_remoto["modo_operacao"]
-                self.estado["sensores"] = estado_remoto["sensores"]
-                self.estado["atuadores"] = estado_remoto["atuadores"]
-                self.estado["ultima_atualizacao"] = estado_remoto["ultima_atualizacao"]
-                self.estado["historico_recente"] = estado_remoto.get("historico_recente", [])
-                self._salvar_storage_local()
+                self._aplicar_estado_remoto(estado_remoto)
                 return True
         return False
 
+    def _montar_resposta_comprometida(self) -> dict:
+        """Simula resposta adulterada/mentirosa sem corromper o banco de dados íntegro."""
+        resposta = copy.deepcopy(self.estado)
+        resposta["comprometido_simulado"] = True
+        resposta["modo_operacao"] = "MANUAL"
+        resposta["sensores"]["umidade_solo"] = 999.9      # Valor fisicamente absurdo
+        resposta["sensores"]["temperatura_grama"] = -45.0  # Valor adulterado
+        resposta["atuadores"]["irrigacao"] = "LIGADO"
+        resposta["atuadores"]["grow_lights"] = "LIGADO"
+        resposta["atuadores"]["climatizacao"] = "AQUECENDO"
+        return resposta
+
     def obter_estado(self) -> dict:
         """
-        Retorna o estado atual do gramado para o Middleware.
-        Se este controlador estiver marcado como 'comprometido' (simulando uma invasão
-        ou falha bizantina), retorna valores adulterados para testar a segurança do Middleware.
+        Retorna o estado atual do gramado diretamente para o Cliente.
+        Se este controlador estiver marcado como 'comprometido' (simulando invasão
+        ou falha bizantina), retorna valores adulterados para testar a segurança.
         """
         with self.lock:
-            resposta = copy.deepcopy(self.estado)
-            resposta["comprometido_simulado"] = self.comprometido
-
             if self.comprometido:
-                # Simula dados corrompidos/mentirosos de um controlador invadido
-                resposta["modo_operacao"] = "MANUAL"
-                resposta["sensores"]["umidade_solo"] = 999.9      # Valor fisicamente absurdo
-                resposta["sensores"]["temperatura_grama"] = -45.0  # Valor adulterado
-                resposta["atuadores"]["irrigacao"] = "LIGADO"
-                resposta["atuadores"]["grow_lights"] = "LIGADO"
-                resposta["atuadores"]["climatizacao"] = "AQUECENDO"
+                return self._montar_resposta_comprometida()
 
+            resposta = copy.deepcopy(self.estado)
+            resposta["comprometido_simulado"] = False
             return resposta
 
     def definir_modo(self, novo_modo: str) -> dict:
@@ -319,6 +349,14 @@ class ControladorGramado:
         novo_modo = novo_modo.upper().strip()
         if novo_modo not in MODOS_VALIDOS:
             return {"sucesso": False, "mensagem": f"Modo invalido: {novo_modo}"}
+
+        if self.comprometido:
+            return {
+                "sucesso": True,
+                "controlador_id": self.ctrl_id,
+                "modo_operacao": "MODO_HACKED",
+                "atuadores": {"irrigacao": "ERRO", "grow_lights": "ERRO", "climatizacao": "ERRO"},
+            }
 
         with self.lock:
             self.estado["modo_operacao"] = novo_modo
@@ -330,15 +368,6 @@ class ControladorGramado:
             self._publicar_comando_atuadores()
 
         self._propagar_replicacao()
-
-        # Se estiver comprometido, mente na resposta do método também
-        if self.comprometido:
-            return {
-                "sucesso": True,
-                "controlador_id": self.ctrl_id,
-                "modo_operacao": "MODO_HACKED",
-                "atuadores": {"irrigacao": "ERRO", "grow_lights": "ERRO", "climatizacao": "ERRO"},
-            }
 
         return {
             "sucesso": True,
@@ -366,6 +395,14 @@ class ControladorGramado:
                 "mensagem": f"Comando invalido ({atuador}={novo_estado})",
             }
 
+        if self.comprometido:
+            return {
+                "sucesso": True,
+                "controlador_id": self.ctrl_id,
+                "modo_operacao": "MODO_HACKED",
+                "atuadores": {"irrigacao": "INVADIDO", "grow_lights": "INVADIDO", "climatizacao": "INVADIDO"},
+            }
+
         with self.lock:
             self.estado["modo_operacao"] = "MANUAL"
             self.estado["atuadores"][atuador] = novo_estado
@@ -376,14 +413,6 @@ class ControladorGramado:
             self._publicar_comando_atuadores()
 
         self._propagar_replicacao()
-
-        if self.comprometido:
-            return {
-                "sucesso": True,
-                "controlador_id": self.ctrl_id,
-                "modo_operacao": "MODO_HACKED",
-                "atuadores": {"irrigacao": "INVADIDO", "grow_lights": "INVADIDO", "climatizacao": "INVADIDO"},
-            }
 
         return {
             "sucesso": True,
@@ -416,11 +445,12 @@ def main() -> None:
 
     ctrl_id = int(sys.argv[1])
     cfg = CONTROLADORES_CONFIG[ctrl_id]
+    db_cfg = DATABASES_CONFIG[ctrl_id]
 
     print("=" * 65)
     print(f" [CONTROLADOR DE PROCESSO #{ctrl_id}] Iniciando no Smart Pitch...")
     print(f" Endpoint Pyro5 : {obter_uri_controlador(ctrl_id)}")
-    print(f" Storage Replic.: gramado/storage/storage_controlador_{ctrl_id}.json")
+    print(f" Banco Postgres : {db_cfg['dbname']} ({db_cfg['host']}:{db_cfg['port']})")
     print("=" * 65)
 
     controlador = ControladorGramado(ctrl_id)
@@ -442,4 +472,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
