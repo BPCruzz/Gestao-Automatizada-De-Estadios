@@ -80,3 +80,40 @@ def obter_uri_middleware() -> str:
     cfg = MIDDLEWARE_CONFIG
     return f"PYRO:{cfg['obj_name']}@{cfg['host']}:{cfg['port']}"
 
+
+# =============================================================================
+# 5. CONFIGURAÇÕES DOS BANCOS DE DADOS POSTGRESQL (1 BANCO POR CONTROLADOR)
+# =============================================================================
+DATABASES_CONFIG = {
+    1: {
+        "host": "localhost",
+        "port": 5432,
+        "dbname": "smart_pitch_1",
+        "user": "smart_pitch",
+        "password": "smart_pitch",
+    },
+    2: {
+        "host": "localhost",
+        "port": 5433,
+        "dbname": "smart_pitch_2",
+        "user": "smart_pitch",
+        "password": "smart_pitch",
+    },
+    3: {
+        "host": "localhost",
+        "port": 5434,
+        "dbname": "smart_pitch_3",
+        "user": "smart_pitch",
+        "password": "smart_pitch",
+    },
+}
+
+
+def obter_dsn_banco(ctrl_id: int) -> str:
+    """Retorna a string de conexão (DSN) PostgreSQL para o controlador informado."""
+    cfg = DATABASES_CONFIG[ctrl_id]
+    return (
+        f"host={cfg['host']} port={cfg['port']} dbname={cfg['dbname']} "
+        f"user={cfg['user']} password={cfg['password']}"
+    )
+

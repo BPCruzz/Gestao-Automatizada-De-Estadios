@@ -1,3 +1,4 @@
 paho-mqtt==2.1.0
 Pyro5==5.15
+psycopg[binary]>=3.2.0
 

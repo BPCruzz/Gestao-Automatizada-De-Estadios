@@ -8,3 +8,47 @@ services:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
     restart: unless-stopped
 
+  postgres_ctrl_1:
+    image: postgres:16-alpine
+    container_name: smart_pitch_db_1
+    environment:
+      POSTGRES_USER: smart_pitch
+      POSTGRES_PASSWORD: smart_pitch
+      POSTGRES_DB: smart_pitch_1
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_ctrl_1:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  postgres_ctrl_2:
+    image: postgres:16-alpine
+    container_name: smart_pitch_db_2
+    environment:
+      POSTGRES_USER: smart_pitch
+      POSTGRES_PASSWORD: smart_pitch
+      POSTGRES_DB: smart_pitch_2
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata_ctrl_2:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  postgres_ctrl_3:
+    image: postgres:16-alpine
+    container_name: smart_pitch_db_3
+    environment:
+      POSTGRES_USER: smart_pitch
+      POSTGRES_PASSWORD: smart_pitch
+      POSTGRES_DB: smart_pitch_3
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata_ctrl_3:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  pgdata_ctrl_1:
+  pgdata_ctrl_2:
+  pgdata_ctrl_3:
+
