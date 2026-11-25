@@ -19,7 +19,7 @@ echo Aguardando containers iniciarem...
 timeout /t 3 /nobreak >nul
 
 echo.
-echo [2/2] Iniciando gerenciador unificado do Smart Pitch...
+echo [2/2] Iniciando terminais em segundo plano e Painel Web...
 where python >nul 2>nul
 if %errorlevel%==0 (
     python gramado\start_all.py
@@ -28,5 +28,5 @@ if %errorlevel%==0 (
 )
 
 echo.
-echo Gerenciador encerrado. (Para parar tambem os containers Docker, execute parar_smart_pitch.bat)
+echo Terminais iniciados em segundo plano! (Para encerrar tudo, execute parar_smart_pitch.bat)
 pause

@@ -1,7 +1,7 @@
 """
 Painel Web Estilo Terminal do Cliente (Smart Pitch - Gramado).
-Interface simples com fundo escuro que centraliza todas as informações do sistema
-sem abrir múltiplas janelas de terminal.
+Interface simples com fundo escuro que aproveita toda a tela para centralizar
+as informações do sistema distribuído.
 
 Conecta-se diretamente aos Controladores de Processo via ClienteControladoresRPC
 (Pyro5 nas portas 9091, 9092 e 9093), sem servidor intermediário.
@@ -29,20 +29,22 @@ HTML_PAINEL = """<!DOCTYPE html>
   <title>Smart Pitch // Terminal</title>
   <style>
     :root {
-      --bg: #080b09;
-      --panel: #0e1410;
-      --border: #1e2d23;
-      --text: #d7e4dc;
-      --muted: #7e9487;
+      --bg: #070a08;
+      --panel: #0d130f;
+      --panel-alt: #0a0f0c;
+      --border: #1d2d22;
+      --text: #dce8e0;
+      --muted: #7f9688;
       --green: #22c55e;
       --amber: #f59e0b;
       --red: #ef4444;
       --cyan: #38bdf8;
     }
     * { box-sizing: border-box; }
-    body {
+    html, body {
+      height: 100%;
       margin: 0;
-      padding: 20px;
+      padding: 0;
       background: var(--bg);
       color: var(--text);
       font-family: Consolas, "Courier New", monospace;
@@ -50,54 +52,109 @@ HTML_PAINEL = """<!DOCTYPE html>
       line-height: 1.45;
     }
     .wrap {
-      max-width: 1100px;
-      margin: 0 auto;
-      display: flex;
-      flex-direction: column;
+      width: 100%;
+      min-height: 100vh;
+      padding: 16px 20px;
+      display: grid;
+      grid-template-rows: auto auto auto 1fr;
       gap: 14px;
     }
     .box {
       background: var(--panel);
       border: 1px solid var(--border);
-      padding: 14px 16px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
     }
     .header {
-      display: flex;
+      flex-direction: row;
       flex-wrap: wrap;
       justify-content: space-between;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
       border-left: 4px solid var(--green);
+      padding: 14px 18px;
     }
     .title {
-      font-size: 16px;
+      font-size: 18px;
       font-weight: bold;
       color: var(--green);
-      letter-spacing: 0.5px;
+      letter-spacing: 0.6px;
     }
     .meta {
       color: var(--muted);
       font-size: 13px;
     }
-    .grid {
+    .header-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .pill {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+    .grid-top {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+      grid-template-columns: repeat(3, minmax(300px, 1fr));
       gap: 14px;
     }
+    .grid-bottom {
+      display: grid;
+      grid-template-columns: 1.6fr 1fr;
+      gap: 14px;
+      min-height: 220px;
+    }
+    @media (max-width: 1100px) {
+      .grid-top { grid-template-columns: 1fr; }
+      .grid-bottom { grid-template-columns: 1fr; }
+    }
     h2 {
-      margin: 0 0 10px 0;
+      margin: 0 0 12px 0;
       font-size: 13px;
       color: var(--cyan);
       text-transform: uppercase;
+      letter-spacing: 0.5px;
       border-bottom: 1px dashed var(--border);
-      padding-bottom: 6px;
+      padding-bottom: 8px;
+    }
+    .sensor-card {
+      padding: 10px 0;
+      border-bottom: 1px dotted #17231b;
+    }
+    .sensor-card:last-child { border-bottom: none; }
+    .sensor-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 6px;
+    }
+    .sensor-val {
+      font-size: 20px;
+      font-weight: bold;
+      color: var(--green);
+    }
+    .bar-track {
+      width: 100%;
+      height: 8px;
+      background: #070b08;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      background: var(--green);
+      transition: width 0.3s ease;
     }
     .row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 6px 0;
-      border-bottom: 1px dotted #152019;
+      padding: 8px 0;
+      border-bottom: 1px dotted #17231b;
       gap: 8px;
     }
     .row:last-child { border-bottom: none; }
@@ -109,7 +166,7 @@ HTML_PAINEL = """<!DOCTYPE html>
       border: 1px solid var(--red);
       background: #1a0d0e;
       color: #fca5a5;
-      padding: 10px 14px;
+      padding: 10px 16px;
       display: none;
     }
     .btns {
@@ -122,7 +179,7 @@ HTML_PAINEL = """<!DOCTYPE html>
       background: #121b15;
       color: var(--text);
       border: 1px solid var(--border);
-      padding: 6px 10px;
+      padding: 7px 12px;
       font-family: inherit;
       font-size: 12px;
       cursor: pointer;
@@ -146,8 +203,8 @@ HTML_PAINEL = """<!DOCTYPE html>
       color: var(--red);
     }
     .ctrl-item {
-      padding: 8px 0;
-      border-bottom: 1px dotted #152019;
+      padding: 10px 0;
+      border-bottom: 1px dotted #17231b;
     }
     .ctrl-item:last-child { border-bottom: none; }
     .ctrl-top {
@@ -160,20 +217,48 @@ HTML_PAINEL = """<!DOCTYPE html>
     .ctrl-sub {
       color: var(--muted);
       font-size: 12px;
-      margin-top: 2px;
+      margin-top: 4px;
     }
     .logs {
       margin: 0;
       padding: 0;
       list-style: none;
       font-size: 13px;
+      color: var(--text);
+      overflow-y: auto;
+      flex: 1;
+    }
+    .logs li {
+      padding: 5px 0;
+      border-bottom: 1px dotted #141f18;
+    }
+    .logs li:last-child { border-bottom: none; }
+    .rules-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 13px;
       color: var(--muted);
     }
-    .logs li { padding: 3px 0; }
+    .rules-list li {
+      padding: 6px 0;
+      border-bottom: 1px dotted #141f18;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .rules-list li:last-child { border-bottom: none; }
     .feedback {
       font-size: 13px;
       color: var(--green);
       min-height: 18px;
+      padding: 0 2px;
+    }
+    .state-badge {
+      padding: 3px 8px;
+      border: 1px solid var(--border);
+      background: var(--panel-alt);
+      font-size: 13px;
     }
   </style>
 </head>
@@ -182,38 +267,60 @@ HTML_PAINEL = """<!DOCTYPE html>
     <div class="box header">
       <div>
         <div class="title">$ SMART_PITCH // PAINEL CENTRALIZADO DO GRAMADO</div>
-        <div class="meta" id="meta-info">Conectando aos controladores...</div>
+        <div class="meta" id="meta-info">Conectando aos controladores via Pyro5...</div>
       </div>
-      <div class="meta">
-        MODO: <span id="modo-atual" class="val ok">--</span> |
-        QUORUM: <span id="quorum-atual" class="val">--</span>
+      <div class="header-badges">
+        <div class="pill">MODO: <span id="modo-atual" class="val ok">--</span></div>
+        <div class="pill">QUORUM TMR: <span id="quorum-atual" class="val">--</span></div>
+        <div class="pill">SYNC: <span class="val ok">LIVE 2s</span></div>
       </div>
     </div>
 
     <div class="alert-box" id="alert-box"></div>
-    <div class="feedback" id="feedback"></div>
+    <div class="feedback" id="feedback">&gt; Aguardando comandos do operador...</div>
 
-    <div class="grid">
+    <div class="grid-top">
       <div class="box">
         <h2>[1] Cluster de Controladores &amp; PostgreSQL</h2>
         <div id="lista-controladores">Carregando...</div>
       </div>
 
       <div class="box">
-        <h2>[2] Sensores do Gramado (MQTT)</h2>
-        <div class="row"><span>Umidade do Solo (Ideal 40-65%)</span><span class="val" id="s-umidade">--</span></div>
-        <div class="row"><span>Luminosidade PAR (Min 12000)</span><span class="val" id="s-luz">--</span></div>
-        <div class="row"><span>Temperatura Raiz (Ideal 16-27)</span><span class="val" id="s-temp">--</span></div>
-        <div class="row"><span>Ultima Leitura</span><span class="meta" id="s-ts">--</span></div>
+        <h2>[2] Sensores do Gramado (MQTT &rarr; Controladores)</h2>
+        <div class="sensor-card">
+          <div class="sensor-head">
+            <span>Umidade do Solo <span class="meta">(Ideal 40-65%)</span></span>
+            <span class="sensor-val" id="s-umidade">--</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill" id="bar-umidade" style="width: 0%"></div></div>
+        </div>
+        <div class="sensor-card">
+          <div class="sensor-head">
+            <span>Luminosidade PAR <span class="meta">(Min 12000 lux)</span></span>
+            <span class="sensor-val" id="s-luz">--</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill" id="bar-luz" style="width: 0%"></div></div>
+        </div>
+        <div class="sensor-card">
+          <div class="sensor-head">
+            <span>Temperatura Raiz <span class="meta">(Ideal 16-27 °C)</span></span>
+            <span class="sensor-val" id="s-temp">--</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill" id="bar-temp" style="width: 0%"></div></div>
+        </div>
+        <div class="row" style="margin-top: auto;">
+          <span class="meta">Ultima Leitura MQTT</span>
+          <span class="val" id="s-ts">--:--:--</span>
+        </div>
       </div>
 
       <div class="box">
-        <h2>[3] Atuadores &amp; Comandos Diretos</h2>
-        <div class="row"><span>Irrigacao</span><span class="val" id="a-irrig">--</span></div>
-        <div class="row"><span>Grow Lights</span><span class="val" id="a-luz">--</span></div>
-        <div class="row"><span>Climatizacao</span><span class="val" id="a-clima">--</span></div>
+        <h2>[3] Atuadores em Campo &amp; Comandos Diretos</h2>
+        <div class="row"><span>Sistema de Irrigacao</span><span class="val state-badge" id="a-irrig">--</span></div>
+        <div class="row"><span>Iluminacao (Grow Lights)</span><span class="val state-badge" id="a-luz">--</span></div>
+        <div class="row"><span>Climatizacao Subterranea</span><span class="val state-badge" id="a-clima">--</span></div>
 
-        <div style="margin-top: 12px;">
+        <div style="margin-top: 14px;">
           <div class="meta">Alterar Modo de Operacao:</div>
           <div class="btns">
             <button id="btn-modo-AUTOMATICO" onclick="definirModo('AUTOMATICO')">AUTOMATICO</button>
@@ -222,8 +329,8 @@ HTML_PAINEL = """<!DOCTYPE html>
           </div>
         </div>
 
-        <div style="margin-top: 12px;">
-          <div class="meta">Acionamento Manual:</div>
+        <div style="margin-top: 14px;">
+          <div class="meta">Acionamento Manual de Atuadores:</div>
           <div class="btns">
             <button onclick="acionar('irrigacao', 'LIGADO')">Irrig: ON</button>
             <button onclick="acionar('irrigacao', 'DESLIGADO')">Irrig: OFF</button>
@@ -237,11 +344,25 @@ HTML_PAINEL = """<!DOCTYPE html>
       </div>
     </div>
 
-    <div class="box">
-      <h2>[4] Ultimos Eventos Replicados no PostgreSQL</h2>
-      <ul class="logs" id="lista-historico">
-        <li>Aguardando eventos...</li>
-      </ul>
+    <div class="grid-bottom">
+      <div class="box">
+        <h2>[4] Historico de Eventos Replicados no PostgreSQL</h2>
+        <ul class="logs" id="lista-historico">
+          <li>Aguardando eventos...</li>
+        </ul>
+      </div>
+
+      <div class="box">
+        <h2>[5] Regras Agronomicas &amp; Protecoes SD</h2>
+        <ul class="rules-list">
+          <li><span>Irrigacao (Histerese)</span><span class="ok">&lt; 40% Liga | &gt; 65% Desliga</span></li>
+          <li><span>Grow Lights (PAR)</span><span class="ok">&lt; 12.000 lux Liga</span></li>
+          <li><span>Climatizacao Raiz</span><span class="ok">&lt; 16°C Aquece | &gt; 27°C Resfria</span></li>
+          <li><span>Modo DIA_DE_JOGO</span><span class="warn">Trava Irrigacao e Luzes OFF</span></li>
+          <li><span>Tolerancia a Quedas</span><span class="ok">Failover Direto Pyro5</span></li>
+          <li><span>Seguranca Bizantina</span><span class="ok">Sanity Check + TMR 2 de 3</span></li>
+        </ul>
+      </div>
     </div>
   </div>
 
@@ -250,6 +371,12 @@ HTML_PAINEL = """<!DOCTYPE html>
       if (st.includes("ONLINE")) return "ok";
       if (st.includes("DIVERGENTE")) return "warn";
       return "err";
+    }
+
+    function classeAtuador(val) {
+      if (val === "LIGADO" || val === "AQUECENDO") return "val state-badge ok";
+      if (val === "RESFRIANDO") return "val state-badge warn";
+      return "val state-badge meta";
     }
 
     function mostrarFeedback(msg, isErr = false) {
@@ -331,7 +458,7 @@ HTML_PAINEL = """<!DOCTYPE html>
                 <span>Controlador ${cid}: <span class="val ${cls}">${st}</span></span>
                 ${btn}
               </div>
-              <div class="ctrl-sub">Pyro5 :${info.pyro_port || "?"} | Postgres ${info.dbname || "?"} (:${info.db_port || "?"})</div>
+              <div class="ctrl-sub">Pyro5 :${info.pyro_port || "?"} | PostgreSQL ${info.dbname || "?"} (:${info.db_port || "?"})</div>
             </div>
           `;
         }).join("");
@@ -349,7 +476,7 @@ HTML_PAINEL = """<!DOCTYPE html>
         const a = est.atuadores;
 
         document.getElementById("meta-info").textContent =
-          `Consulta: ${dados.timestamp_consulta} | Storage Replicado: v${est.versao} | Comunicacao Direta Pyro5`;
+          `Ultima Consulta: ${dados.timestamp_consulta} | Storage Replicado: v${est.versao} | Comunicacao Direta Pyro5`;
         document.getElementById("modo-atual").textContent = est.modo_operacao;
         document.getElementById("quorum-atual").textContent = dados.quorum;
 
@@ -359,13 +486,26 @@ HTML_PAINEL = """<!DOCTYPE html>
         });
 
         document.getElementById("s-umidade").textContent = s.umidade_solo + " %";
-        document.getElementById("s-luz").textContent = Math.round(s.luminosidade_lux) + " lux";
+        document.getElementById("bar-umidade").style.width = Math.min(100, Math.max(0, s.umidade_solo)) + "%";
+
+        const luzVal = Math.round(s.luminosidade_lux);
+        document.getElementById("s-luz").textContent = luzVal + " lux";
+        document.getElementById("bar-luz").style.width = Math.min(100, Math.max(0, (luzVal / 25000) * 100)) + "%";
+
         document.getElementById("s-temp").textContent = s.temperatura_grama + " °C";
+        document.getElementById("bar-temp").style.width = Math.min(100, Math.max(0, ((s.temperatura_grama - 5) / 35) * 100)) + "%";
+
         document.getElementById("s-ts").textContent = s.timestamp;
 
-        document.getElementById("a-irrig").textContent = a.irrigacao;
-        document.getElementById("a-luz").textContent = a.grow_lights;
-        document.getElementById("a-clima").textContent = a.climatizacao;
+        const elIrrig = document.getElementById("a-irrig");
+        const elLuz = document.getElementById("a-luz");
+        const elClima = document.getElementById("a-clima");
+        elIrrig.textContent = a.irrigacao;
+        elIrrig.className = classeAtuador(a.irrigacao);
+        elLuz.textContent = a.grow_lights;
+        elLuz.className = classeAtuador(a.grow_lights);
+        elClima.textContent = a.climatizacao;
+        elClima.className = classeAtuador(a.climatizacao);
 
         const hist = est.historico_recente || [];
         const ul = document.getElementById("lista-historico");
@@ -404,7 +544,6 @@ class PainelHandler(BaseHTTPRequestHandler):
         return json.loads(bruto)
 
     def log_message(self, format, *args) -> None:
-        # Mantém o console limpo sem poluir com logs de polling a cada 2s
         pass
 
     def do_GET(self) -> None:

@@ -1,13 +1,13 @@
 """
 Script Inicializador do Subsistema Gramado (Smart Pitch).
-Modo padrão (unificado em 1 terminal):
-  - Sobe os 3 Controladores, Atuadores, Sensores e o Painel Web em background.
-  - Abre o Painel Web estilo terminal (http://127.0.0.1:8080).
-  - Permite derrubar/religar qualquer Controlador (1, 2 ou 3) no próprio terminal
-    para demonstrar tolerância a quedas sem precisar de 7 janelas abertas.
+Modo padrão:
+  - Abre os terminais individuais (Controladores 1, 2, 3, Atuadores, Sensores e Painel Web)
+    minimizados em segundo plano, permitindo inspecionar cada console pela barra de tarefas
+    sem poluir a tela na inicialização.
+  - Abre automaticamente o Painel Web estilo terminal (http://127.0.0.1:8080).
 
-Uso alternativo (janelas separadas):
-  python gramado/start_all.py --janelas
+Modo alternativo (1 único terminal gerenciador):
+  python gramado/start_all.py --unificado
 
 Pré-requisito: Broker MQTT Mosquitto e 3 bancos PostgreSQL rodando (docker compose up -d).
 """
@@ -50,12 +50,13 @@ def encerrar_processo(proc: subprocess.Popen | None) -> None:
         proc.kill()
 
 
-def abrir_em_janela(titulo: str, comando_args: list[str]) -> None:
-    """Abre um novo terminal visível para acompanhar os logs de cada componente."""
+def abrir_em_janela(titulo: str, comando_args: list[str], minimizado: bool = True) -> None:
+    """Abre um terminal para o componente (minimizado em segundo plano por padrão no Windows)."""
     if os.name == "nt":
         cmd_str = " ".join(f'"{arg}"' if " " in arg else arg for arg in comando_args)
+        flag_min = "/min " if minimizado else ""
         subprocess.Popen(
-            f'start "{titulo}" cmd /k {cmd_str}',
+            f'start {flag_min}"{titulo}" cmd /k {cmd_str}',
             cwd=str(DIRETORIO_GRAMADO),
             shell=True,
         )
@@ -63,9 +64,10 @@ def abrir_em_janela(titulo: str, comando_args: list[str]) -> None:
         subprocess.Popen(comando_args, cwd=str(DIRETORIO_GRAMADO))
 
 
-def iniciar_modo_janelas() -> None:
+def iniciar_modo_janelas(minimizado: bool = True) -> None:
+    modo_txt = "MINIMIZADOS EM SEGUNDO PLANO" if minimizado else "EM JANELAS ABERTAS"
     print("=" * 65)
-    print(" INICIANDO COMPONENTES DO SMART PITCH EM JANELAS SEPARADAS")
+    print(f" INICIANDO COMPONENTES DO SMART PITCH ({modo_txt})")
     print("=" * 65)
 
     processos = [
@@ -78,13 +80,17 @@ def iniciar_modo_janelas() -> None:
 
     for titulo, args in processos:
         print(f" -> Iniciando {titulo}...")
-        abrir_em_janela(titulo, args)
-        time.sleep(0.8)
+        abrir_em_janela(titulo, args, minimizado=minimizado)
+        time.sleep(0.5)
 
-    print(" -> Abrindo Painel Web...")
-    time.sleep(1.0)
-    abrir_em_janela("Painel Smart Pitch", [PYTHON_EXEC, "painel_web.py"])
-    print("\nTodos os processos foram iniciados!")
+    print(" -> Iniciando Painel Web (http://127.0.0.1:8080)...")
+    abrir_em_janela("Painel Smart Pitch", [PYTHON_EXEC, "painel_web.py"], minimizado=minimizado)
+    time.sleep(1.2)
+    webbrowser.open("http://127.0.0.1:8080")
+
+    print("\nTodos os terminais individuais foram abertos em segundo plano!")
+    print("Voce pode clicar em qualquer terminal na barra de tarefas para ver os logs")
+    print("ou executar 'inicializacao_rapida\\parar_smart_pitch.bat' para encerrar tudo.")
 
 
 def iniciar_modo_unificado() -> None:
@@ -153,10 +159,12 @@ def iniciar_modo_unificado() -> None:
 
 
 def main() -> None:
-    if "--janelas" in sys.argv:
-        iniciar_modo_janelas()
-    else:
+    if "--unificado" in sys.argv:
         iniciar_modo_unificado()
+    elif "--janelas" in sys.argv:
+        iniciar_modo_janelas(minimizado=False)
+    else:
+        iniciar_modo_janelas(minimizado=True)
 
 
 if __name__ == "__main__":
