@@ -4,18 +4,30 @@ Assina o tópico de comandos no Broker MQTT e atua sobre os 3 subsistemas físic
   1. Sistema de Irrigação (Sprinklers) -> LIGADO / DESLIGADO
   2. Iluminação Artificial (Grow Lights) -> LIGADO / DESLIGADO
   3. Climatização Subterrânea -> AQUECENDO / RESFRIANDO / DESLIGADO
+
+Inclui proteção contra comandos adulterados ou divergentes:
+  - Sanity Check dos estados permitidos antes de processar.
+  - Votação por maioria sobre janela temporal recente entre controladores ativos.
 """
 
+from collections import Counter
 import json
 import random
+import time
 import paho.mqtt.client as mqtt
 
 from config import (
+    ESTADOS_CLIMATIZACAO,
+    ESTADOS_GROW_LIGHTS,
+    ESTADOS_IRRIGACAO,
     MQTT_BROKER_HOST,
     MQTT_BROKER_PORT,
     MQTT_KEEPALIVE,
     TOPICO_ATUADORES,
 )
+
+# Janela (segundos) para considerar votos recentes de cada controlador ativo
+JANELA_VOTACAO_S = 10.0
 
 # Estado local atual dos equipamentos físicos no campo
 estado_fisico_atuadores = {
@@ -24,10 +36,23 @@ estado_fisico_atuadores = {
     "climatizacao": "DESLIGADO",
 }
 
+# Último comando válido recebido de cada controlador: {origem: (tupla_estados, timestamp)}
+votos_atuadores: dict[str, tuple[tuple[str, str, str], float]] = {}
+
+
+def _comando_valido(atuadores: dict) -> bool:
+    """Sanity Check: garante que todos os estados pertencem ao domínio válido."""
+    return (
+        isinstance(atuadores, dict)
+        and atuadores.get("irrigacao") in ESTADOS_IRRIGACAO
+        and atuadores.get("grow_lights") in ESTADOS_GROW_LIGHTS
+        and atuadores.get("climatizacao") in ESTADOS_CLIMATIZACAO
+    )
+
 
 def ao_conectar(client, userdata, flags, reason_code, properties):
     if reason_code == 0:
-        print(f"[ATUADORES] Conectado ao Broker MQTT com sucesso!")
+        print("[ATUADORES] Conectado ao Broker MQTT com sucesso!")
         client.subscribe(TOPICO_ATUADORES, qos=1)
         print(f"[ATUADORES] Assinando topico: {TOPICO_ATUADORES}\n")
     else:
@@ -42,10 +67,46 @@ def ao_receber_mensagem(client, userdata, msg):
         origem = dados.get("origem", "Controlador")
         horario = dados.get("timestamp", "--:--:--")
 
+        if not _comando_valido(atuadores_recebidos):
+            print(f"[{horario}] [SEGURANCA ATUADORES] Comando invalido de {origem} bloqueado pelo Sanity Check!")
+            return
+
+        agora = time.time()
+        tupla_cmd = (
+            atuadores_recebidos["irrigacao"],
+            atuadores_recebidos["grow_lights"],
+            atuadores_recebidos["climatizacao"],
+        )
+        votos_atuadores[origem] = (tupla_cmd, agora)
+
+        # Remove votos antigos de controladores que possam ter caído
+        expirados = [k for k, (_, ts) in votos_atuadores.items() if agora - ts > JANELA_VOTACAO_S]
+        for k in expirados:
+            del votos_atuadores[k]
+
+        contagem = Counter(cmd for cmd, _ in votos_atuadores.values())
+        vencedor, num_votos = contagem.most_common(1)[0]
+        total_ativos = len(votos_atuadores)
+
+        if num_votos <= total_ativos / 2:
+            print(f"[{horario}] [CONSENSO ATUADORES] Empate parcial ({num_votos}/{total_ativos}) — aguardando proximo voto...")
+            return
+
+        if tupla_cmd != vencedor:
+            print(
+                f"[{horario}] [SEGURANCA ATUADORES] Comando divergente de {origem} ignorado "
+                f"(consenso {num_votos}/{total_ativos})"
+            )
+            return
+
+        novos_estados = {
+            "irrigacao": vencedor[0],
+            "grow_lights": vencedor[1],
+            "climatizacao": vencedor[2],
+        }
         mudou = False
-        for chave in ("irrigacao", "grow_lights", "climatizacao"):
-            novo_valor = atuadores_recebidos.get(chave)
-            if novo_valor and estado_fisico_atuadores.get(chave) != novo_valor:
+        for chave, novo_valor in novos_estados.items():
+            if estado_fisico_atuadores.get(chave) != novo_valor:
                 estado_fisico_atuadores[chave] = novo_valor
                 mudou = True
 
@@ -56,9 +117,9 @@ def ao_receber_mensagem(client, userdata, msg):
         )
 
         if mudou:
-            print(f"[{horario}] [MUDANCA FISICA via {origem}] -> {status_str}")
+            print(f"[{horario}] [MUDANCA FISICA | Consenso {num_votos}/{total_ativos} via {origem}] -> {status_str}")
         else:
-            print(f"[{horario}] [SINCRONIZADO via {origem}]   -> {status_str}")
+            print(f"[{horario}] [SINCRONIZADO | Consenso {num_votos}/{total_ativos} via {origem}] -> {status_str}")
 
     except Exception as exc:
         print(f"[ERRO] Mensagem MQTT invalida recebida: {exc}")
@@ -90,4 +151,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
